@@ -1,0 +1,22 @@
+{
+  "name": "telebot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "tsx --env-file=.env src/login.ts",
+    "listen": "tsx --env-file=.env src/listen.ts",
+    "chat": "tsx --env-file=.env src/chat.ts",
+    "bot": "tsx --env-file=.env src/index.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.74.2",
+    "croner": "^10.0.1",
+    "input": "^1.0.1",
+    "teleproto": "^1.229.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

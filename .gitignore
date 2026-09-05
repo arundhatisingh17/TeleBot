@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.session
+messages.json
+memory.json
+test-messages.json
+test-memory.json
