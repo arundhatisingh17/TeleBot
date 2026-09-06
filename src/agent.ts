@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
+import { stream, Type } from "@earendil-works/pi-ai";
 import { CONVERSATION_MODEL, sessionIdFor } from "./models.js";
 import { type GifSource, pickBestGif, stubGifSource } from "./gifs.js";
 import { loadMemories, type Memory, renderMemories, saveMemories, updateMemories } from "./memory.js";
@@ -165,6 +165,9 @@ export async function createAgent(gifSource: GifSource = stubGifSource, mode: Mo
 		// Lets the provider bill repeated history at the cache-read rate
 		// (~6x cheaper) instead of re-charging full price every turn.
 		sessionId: sessionIdFor(mode, dayKey),
+		// pi-agent-core's default stream function returns a bodiless 400 against
+		// Hugging Face's router; pi-ai's own `stream` works. Verified 3/3 vs 0/3.
+		streamFn: (model, context, options) => stream(model, context, options as any),
 	});
 
 	// The tool closes over `agent`, so switching is just reassigning state.

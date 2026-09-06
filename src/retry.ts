@@ -19,6 +19,11 @@ export const RETRY_BUDGET_MS = 10 * 60_000;
 
 /** True for errors that a retry could plausibly fix. */
 export function isRetryable(message: string): boolean {
+	// A 400 with no body is a gateway hiccup, not a validation error — a real
+	// bad request comes back with an explanation. Retry those; a 400 that does
+	// carry a body means we sent something wrong and retrying won't help.
+	if (/400 status code \(no body\)/i.test(message)) return true;
+
 	// 402 = out of credits. Retryable only in the sense that topping up fixes
 	// it — which is why the budget exists.
 	return /\b(402|429|500|502|503|504)\b|rate.?limit|timeout|ECONN|network|overloaded/i.test(message);
