@@ -12,7 +12,7 @@
 import input from "input";
 import { createAgent } from "./agent.js";
 
-const { agent, send, getPersonaId, getBusyUntil, setPersonaId } = await createAgent();
+const { agent, send, getPersonaId, getBusyUntil, setPersonaId } = await createAgent(undefined, "test");
 
 console.log(`Persona: ${getPersonaId()}   (/persona <id>, /who, /exit)\n`);
 

@@ -5,6 +5,7 @@
   "scripts": {
     "login": "tsx --env-file=.env src/login.ts",
     "listen": "tsx --env-file=.env src/listen.ts",
+    "whois": "tsx --env-file=.env src/whois.ts",
     "chat": "tsx --env-file=.env src/chat.ts",
     "bot": "tsx --env-file=.env src/index.ts"
   },

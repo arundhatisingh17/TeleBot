@@ -5,3 +5,5 @@ messages.json
 memory.json
 test-messages.json
 test-memory.json
+bot.log
+bot.error.log

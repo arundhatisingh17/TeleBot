@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk -F= '/^PARTNER_ID|^DRY_RUN/ {print $1 \"=\" \\(length\\($2\\)>0 ? $2 : \"[EMPTY]\"\\)}' .env)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"typecheck: $?\")",
+      "Bash(plutil -lint ~/Library/LaunchAgents/com.telebot.agent.plist)",
+      "Bash(awk -F= '/^DRY_RUN|^PARTNER_ID/ {print $0}' .env)",
+      "Bash(launchctl unload *)",
+      "Bash(launchctl load *)",
+      "Bash(launchctl list *)",
+      "Bash(timeout 90 bash -c 'until grep -q \"DRY RUN — would send\\\\|Listening\" bot.log; do sleep 3; done')",
+      "Bash(ps -o pid,etime,%cpu,rss,state -p 45787)",
+      "Bash(npx tsx *)",
+      "Bash(echo \"started bg pid $!\")",
+      "Bash(awk -F= '/^DRY_RUN/ {print $0}' .env)"
+    ]
+  }
+}

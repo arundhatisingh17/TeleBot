@@ -49,8 +49,22 @@ function runawayGuard(): boolean {
 const gifSource = createGifSource(client, partnerId, dryRun);
 const { agent, send, nudge, getLastInboundAt, setPersonaId, getPersonaId } = await createAgent(gifSource, "live");
 
-console.log(`Connected as ${me.username ?? me.firstName}. Persona: ${getPersonaId()}`);
-console.log(selfTest ? `SELF-TEST — talking to your own Saved Messages (${partnerId}).` : `Partner: ${partnerId}`);
+console.log(`Connected as ${me.username ?? me.firstName} (${me.id}). Persona: ${getPersonaId()}`);
+
+// Resolve the target and name it out loud. Sending as you, to the wrong
+// person, is the one mistake with no undo — so confirm before anything runs.
+if (selfTest) {
+	console.log(`SELF-TEST — talking to your own Saved Messages (${partnerId}).`);
+} else {
+	const them: any = await client.getEntity(partnerId);
+	const name = [them.firstName, them.lastName].filter(Boolean).join(" ") || them.username || "(no name)";
+	console.log(`Partner: ${name}${them.username ? ` @${them.username}` : ""} (${partnerId})`);
+	if (them.id?.toString() === me.id.toString()) {
+		console.error("!! PARTNER_ID is your own account. Use PARTNER_ID=me for self-test, or set his real id.");
+		process.exit(1);
+	}
+}
+
 console.log(dryRun ? "DRY RUN — nothing will actually be sent.\n" : "LIVE — messages will be sent.\n");
 
 /**
@@ -133,6 +147,77 @@ async function onMessage(event: NewMessageEvent) {
 	}
 }
 
+/**
+ * Catch up on anything he sent while the bot was down.
+ *
+ * Event handlers only fire for messages that arrive while we're connected, so
+ * a crash or a closed laptop loses whatever came in meanwhile. On startup we
+ * look back for messages newer than our last reply and answer them.
+ *
+ * Age matters: replying to a two-day-old message as if it just arrived is
+ * worse than staying quiet. Past MAX_CATCHUP_AGE_MS we skip it, and inside
+ * that window we tell the model how late it is so it can acknowledge the gap.
+ */
+const MAX_CATCHUP_AGE_MS = 12 * 60 * 60_000;
+
+async function catchUp() {
+	const history = await client.getMessages(partnerId, { limit: 25 });
+	console.log(`[catchup] checking ${history.length} recent messages...`);
+
+	// Newest first. Collect his messages until we hit one of ours.
+	const unanswered: any[] = [];
+	for (const m of history as any[]) {
+		if (selfTest ? ourMessageIds.has(m.id) : m.out) break;
+		if (m.senderId?.toString() !== partnerId) continue;
+		unanswered.push(m);
+	}
+	if (unanswered.length === 0) {
+		console.log("[catchup] nothing unanswered — his last message already has a reply after it");
+		return;
+	}
+
+	unanswered.reverse(); // oldest first, so it reads in order
+	const newest = unanswered.at(-1)!;
+	const ageMs = Date.now() - newest.date * 1000;
+
+	if (ageMs > MAX_CATCHUP_AGE_MS) {
+		console.log(`[catchup] ${unanswered.length} unanswered, but newest is ${Math.round(ageMs / 3600_000)}h old — skipping`);
+		return;
+	}
+
+	const mins = Math.round(ageMs / 60_000);
+	const ago = mins < 60 ? `${mins} minutes` : `${(mins / 60).toFixed(1)} hours`;
+	console.log(`[catchup] ${unanswered.length} unanswered message(s), newest ${ago} ago`);
+
+	// Only the newest message goes into context. The earlier ones are almost
+	// always build-up to the last one, and re-litigating a backlog costs tokens
+	// on every turn afterwards — it stays in history for the rest of the day.
+	const newestText = newest.text ? newest.text : newest.media ? "[a GIF/photo]" : "[unsupported]";
+
+	let frames;
+	try {
+		const doc = newest.media?.document;
+		if (doc?.attributes?.some((a: any) => a.className === "DocumentAttributeAnimated")) {
+			frames = await extractFrames((await client.downloadMedia(newest.media)) as Buffer, 5);
+		}
+	} catch {
+		// Media unavailable — reply to the text alone.
+	}
+
+	await send(
+		[
+			`[Catching up. You were away and did not reply.`,
+			unanswered.length > 1 ? `He sent ${unanswered.length} messages; only the last is shown.` : "",
+			`He sent this ${ago} ago: ${newestText}`,
+			frames ? `Its frames follow.` : "",
+			`Reply to it. Acknowledge the delay naturally if it was long, but do not over-apologise or explain why.]`,
+		]
+			.filter(Boolean)
+			.join(" "),
+		frames,
+	);
+}
+
 // In self-test we must see outgoing messages too — they're the only kind
 // there — so the library-level `incoming` filter has to come off.
 client.addEventHandler(
@@ -140,10 +225,27 @@ client.addEventHandler(
 	selfTest ? new NewMessage({ chats: [partnerId] }) : new NewMessage({ incoming: true, fromUsers: [partnerId] }),
 );
 
-scheduleMorning({
+const morningJob = {
 	getLastInboundAt,
 	onResetPersona: () => setPersonaId(DEFAULT_PERSONA),
 	onSend: () => nudge("It is 9am and he hasn't texted yet. Send him a good morning."),
-});
+};
+
+scheduleMorning(morningJob);
+
+// FORCE_MORNING=1 fires the greeting immediately instead of waiting for 09:00.
+// Run it once with DRY_RUN=1 before trusting it to fire unattended.
+if (process.env.FORCE_MORNING === "1") {
+	console.log("[morning] FORCE_MORNING set — firing now");
+	morningJob.onResetPersona();
+	await morningJob.onSend();
+}
+
+// After the handler is registered, so a message arriving mid-catchup isn't lost.
+try {
+	await catchUp();
+} catch (err) {
+	console.error("[catchup] failed:", (err as Error).message);
+}
 
 console.log("Listening. Ctrl-C to stop.\n");
